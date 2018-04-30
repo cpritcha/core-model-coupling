@@ -1,28 +1,32 @@
-from setuptools import setup
+from setuptools import setup, Extension
+from Cython.Build import cythonize
+from Cython.Distutils import build_ext
+from invoke import task, Context
+import os
 
-def build_native(spec):
-    # build an example rust library
-    build = spec.add_external_build(
-        cmd=['cargo', 'build', '--release'],
-        path='../..'
-    )
+@task
+def build_rust(ctx):
+    with ctx.cd('../..'):
+        ctx.run('cargo build --release')
 
-    spec.add_cffi_module(
-        module_path='core_model_coupling._native',
-        dylib=lambda: build.find_dylib('core_model_coupling', in_path='target/release'),
-        header_filename=lambda: build.find_header('core_model_coupling.h', in_path='target'),
-        rtld_flags=['NOW', 'NODELETE']
-    )
+build_rust(Context())
+
+ext = Extension('core.binding',
+                ['core/binding.pyx', 'core_model_coupling.pxd'],
+                library_dirs=['../../target/release'],
+                libraries=['core_model_coupling'],
+                runtime_library_dirs=['../../target/release'],
+                # extra_objects=['../../target/release/libcore_model_coupling.a'],
+                include_dirs=['../../target', '.'])
+
+extensions = [ext]
 
 setup(
-    name='core_model_coupling',
+    name='core',
     version='0.0.1',
-    packages=['core_model_coupling'],
+    packages=['core'],
     zip_safe=False,
     platforms='any',
-    setup_requires=['milksnake'],
-    install_requires=['milksnake'],
-    milksnake_tasks=[
-        build_native
-    ]
+    ext_modules=cythonize(extensions),
+    cmdclass={'build_ext': build_ext}
 )
